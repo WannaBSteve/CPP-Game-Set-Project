@@ -24,36 +24,66 @@ bool Timer(int ms, int id) {
 struct Plane {
 	int x, y;
 	int HP;//生命值
+	int sheild;
+	bool haveshield;
 	bool isDie;//飞机是否死亡
+	bool undefeat;//飞机是否是无敌状态
+	int crashtime;//最近一次发生撞击的时间
 	int frame;//帧
+	int hitframe;//给护盾做特殊动画的帧
+
+	void setUndefeat();
+	void delUndefeat();
 }gamer;
 Plane enemy[ENEMY_NUM];
 struct Bullet {
 	int x, y;
 	bool isDie;
 }bullet[BULLET_NUM];
+IMAGE flushimg;		//缓冲区,防止闪屏
 IMAGE img_gamer[2];//玩家飞机的图片
-IMAGE img_bk;
+IMAGE img_gamerhit[2];//护盾耗尽时，玩家飞机被撞击之后的图片
+IMAGE img_sheildhit[5];//还有护盾时，玩家飞机被撞击之后的图片
+IMAGE img_bk;		//背景图，也是贴图的主界面
 IMAGE img_bullet[2];
 IMAGE img_enemy[2];
 IMAGE img_healthbar[7];
 IMAGE img_hp;
-IMAGE img_sheildbar;
+IMAGE img_sheildbar[5];
+
+
+
 
 void drawHpbar(Plane* plane);
+void drawsheildbar(Plane* plane);
 //飞机初始化
 void init_Plane(Plane* pthis, int x, int y) {
 	pthis->isDie = false;
 	pthis->x = x;
 	pthis->y = y;
 	pthis->frame = 0;
+	pthis->hitframe = 0;
 	pthis->HP = 6;
+	pthis->sheild = 4;
+	pthis->haveshield = true;
+	pthis->undefeat = false;	//最开始不是无敌状态，只有扣了血的一段时间内或者捡到道具才进入
 }
 //绘制飞机
 void draw_Plane(Plane* pthis) {
-	drawAlpha(img_gamer + pthis->frame, pthis->x, pthis->y, 102, 126, 0, 0, 1);
+	if(pthis->undefeat==false)drawAlpha(img_gamer + pthis->frame, pthis->x, pthis->y, 102, 126, 0, 0, 1);
+	else if (pthis->undefeat = true) {
+		if (pthis->haveshield == false ) 
+			drawAlpha(img_gamerhit + pthis->frame, pthis->x, pthis->y, 102, 126, 0, 0, 1);
+		else if (pthis->haveshield == true && pthis->sheild == 0) 
+		{
+			pthis->haveshield = false;
+			drawAlpha(img_sheildhit + pthis->hitframe, pthis->x, pthis->y, 102, 126, 0, 0, 1);
+		}
+		else drawAlpha(img_sheildhit + pthis->hitframe, pthis->x, pthis->y, 102, 126, 0, 0, 1);
+	}
 	drawHpbar(pthis);
-	drawAlpha(&img_sheildbar, 0, 37, 117, 27, 0, 0, 1);
+	drawsheildbar(pthis);
+	pthis->hitframe = (pthis->hitframe + 1) % 5;
 	pthis->frame = (pthis->frame + 1) % 2;
 }
 //移动飞机
@@ -77,22 +107,60 @@ void move_Plane(Plane* pthis) {
 	}
 	//判断是否撞到敌机而死
 	for (int i = 0; i < ENEMY_NUM; ++i) {
+		
 		if (pthis->HP == 0) {
-			pthis->isDie = true;
+			pthis->isDie = true;		
 			break;
 		}//如果生命值为零游戏结束
-		if (pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
-			pthis->HP--;
+		if (pthis->sheild == 0) { //当护盾为0之后开始扣血
+			
+			if (pthis->undefeat == 0 && pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
+				pthis->HP--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x + img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
+				pthis->HP--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y + img_gamer->getheight() >= enemy[i].y && pthis->y + img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
+				pthis->HP--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x + img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y + img_gamer->getheight() >= enemy[i].y && pthis->y + img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
+				pthis->HP--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+		
 		}
-		if (pthis->x+img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer ->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
-			pthis->HP--;
+		else {
+			if (pthis->undefeat == 0 && pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
+				pthis->sheild--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x + img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y >= enemy[i].y && pthis->y <= enemy[i].y + img_enemy->getheight()) {
+				pthis->sheild--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y + img_gamer->getheight() >= enemy[i].y && pthis->y + img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
+				pthis->sheild--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			else if (pthis->undefeat == 0 && pthis->x + img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y + img_gamer->getheight() >= enemy[i].y && pthis->y + img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
+				pthis->sheild--;
+				pthis->crashtime = clock();//记录最近一次撞击时间
+				pthis->setUndefeat();//设置为短暂无敌
+			}
+			
 		}
-		if (pthis->x >= enemy[i].x && pthis->x <= enemy[i].x + img_enemy->getwidth() && pthis->y+img_gamer->getheight() >= enemy[i].y && pthis->y+img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
-			pthis->HP--;
-		}
-		if (pthis->x + img_gamer->getwidth() >= enemy[i].x && pthis->x + pthis->x + img_gamer->getwidth() <= enemy[i].x + img_enemy->getwidth() && pthis->y + img_gamer->getheight() >= enemy[i].y && pthis->y + img_gamer->getheight() <= enemy[i].y + img_enemy->getheight()) {
-			pthis->HP--;
-		}
+		if (clock() - pthis->crashtime >= 2000)pthis->delUndefeat();		//无敌时间为2s
+		
 	}
 }
 //创建敌机
@@ -146,6 +214,13 @@ void loadResource() {
 	loadimage(&img_bk, "background.png", 480, 850);
 	loadimage(img_gamer + 0, "me1.png");
 	loadimage(img_gamer + 1, "me2.png");
+	loadimage(img_gamerhit + 0, "me1_hit.png");
+	loadimage(img_gamerhit + 1, "me2_hit.png");
+	loadimage(img_sheildhit + 0, "me2_sheild.png");
+	loadimage(img_sheildhit + 1, "me2_sheild1.png");
+	loadimage(img_sheildhit + 2, "me2_sheild2.png");
+	loadimage(img_sheildhit + 3, "me2_sheild3.png");
+	loadimage(img_sheildhit + 4, "me2_sheild4.png");
 	//加载子弹
 	loadimage(img_bullet + 0, "bullet1.png");
 	loadimage(img_bullet + 1, "bullet2.png");
@@ -157,8 +232,12 @@ void loadResource() {
 	loadimage(img_healthbar+1, "healthbar-1.png");
 	loadimage(img_healthbar+2, "healthbar-2.png");
 	loadimage(img_healthbar+3, "healthbar-3.png");
-	loadimage(&img_sheildbar, "sheildbar.png");
-	
+	loadimage(img_sheildbar+0, "sheildbar.png");
+	loadimage(img_sheildbar + 1, "sheildbar-1.png");
+	loadimage(img_sheildbar + 2, "sheildbar-2.png");
+	loadimage(img_sheildbar + 3, "sheildbar-3.png");
+	loadimage(img_sheildbar + 4, "sheildbar-4.png");
+
 	//加载help等button
 	
 
@@ -191,6 +270,10 @@ void init() {
 void drawHpbar(Plane* plane) {
 	int i = 6 - plane->HP;
 	drawAlpha(img_healthbar+i, 0, 5, 150, 34, 0, 0, 1);
+}
+void drawsheildbar(Plane* plane) {
+	int i = 4 - plane->sheild;
+	drawAlpha(img_sheildbar + i, 0, 39, 117, 27, 0, 0, 1);
 }
 //绘制界面
 void draw() {
@@ -270,6 +353,45 @@ void drawAlpha(IMAGE* image, int x, int y, int width, int height, int pic_x, int
 		}
 	}
 }
+
+void drawAlpha(IMAGE* dstimg, int x, int y, IMAGE* srcimg)
+{
+	if (dstimg == NULL)
+	{
+		return;
+	}
+	// 变量初始化
+	DWORD* dst = GetImageBuffer(dstimg);
+	DWORD* src = GetImageBuffer(srcimg);
+	int src_width = srcimg->getwidth();
+	int src_height = srcimg->getheight();
+	int dst_width = dstimg->getwidth();
+	int dst_height = dstimg->getheight();
+
+	// 实现透明贴图  可优化
+	for (int iy = 0; iy < src_height; iy++)
+	{
+		for (int ix = 0; ix < src_width; ix++)
+		{
+			int srcX = ix + iy * src_width;
+			int sa = ((src[srcX] & 0xff000000) >> 24);
+			int sr = ((src[srcX] & 0xff0000) >> 16);
+			int sg = ((src[srcX] & 0xff00) >> 8);
+			int sb = src[srcX] & 0xff;
+			if (x + ix >= 0 && x + ix < dst_width
+				&& y + iy >= 0 && y + iy < dst_height)
+			{
+				int dstX = (x + ix) + (y + iy) * dst_width;
+				int dr = ((dst[dstX] & 0xff0000) >> 16);
+				int dg = ((dst[dstX] & 0xff00) >> 8);
+				int db = dst[dstX] & 0xff;
+				dst[dstX] = ((sr * sa / 255 + dr * (255 - sa) / 255) << 16)
+					| ((sg * sa / 255 + dg * (255 - sa) / 255) << 8)
+					| (sb * sa / 255 + db * (255 - sa) / 255);
+			}
+		}
+	}
+}
 int main() {
 	//创建窗口
 	initgraph(480, 850);
@@ -282,7 +404,11 @@ L1: loadimage(&img_bk, "background.png",480,850);
 	loadimage(img_healthbar + 5, "healthbar-5.png");
 	loadimage(img_healthbar + 6, "healthbar-6.png");
 	
-	loadimage(&img_sheildbar, "sheildbar.png");
+	loadimage(img_sheildbar + 0, "sheildbar.png");
+	loadimage(img_sheildbar + 1, "sheildbar-1.png");
+	loadimage(img_sheildbar + 2, "sheildbar-2.png");
+	loadimage(img_sheildbar + 3, "sheildbar-3.png");
+	loadimage(img_sheildbar + 4, "sheildbar-4.png");
 	putimage(0, 0, &img_bk);
 
 	TCHAR s[50] = "1.开始游戏";
@@ -317,7 +443,12 @@ L1: loadimage(&img_bk, "background.png",480,850);
 					if (1000 / 60 - frameTime > 0) {
 						Sleep(1000 / 60 - frameTime);
 					}
+					
+					//双缓冲消除闪屏
+					drawAlpha(&flushimg, 0, 0, &img_bk);
+					drawAlpha(&img_bk, 0, 0, &flushimg);
 				}
+				
 				system("pause");
 			}
 			else if (m.x >= 155 && m.x <= 325 && m.y >= 360 && m.y <= 410) {
@@ -334,4 +465,14 @@ L1: loadimage(&img_bk, "background.png",480,850);
 	}
 	system("pause");
 	return 0;
+}
+
+void Plane::setUndefeat()
+{
+	undefeat = true;
+}
+
+void Plane::delUndefeat()
+{
+	undefeat = false;
 }
